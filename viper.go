@@ -1178,6 +1178,24 @@ func (v *Viper) SetDefault(key string, value interface{}) {
 	deepestMap[lastKey] = value
 }
 
+// set sets the value for the key in the override register.
+// set is case-insensitive for a key.
+// Will be used instead of values obtained via
+// flags, config file, ENV, default, or key/value store.
+func (v *Viper) set(m map[string]interface{}, key string, value interface{}) {
+	// If alias passed in, then set the proper override
+	key = v.realKey(strings.ToLower(key))
+	value = toCaseInsensitiveValue(value)
+
+	path := strings.Split(key, v.keyDelim)
+	lastKey := strings.ToLower(path[len(path)-1])
+	deepestMap := deepSearch(m, path[0:len(path)-1])
+
+	// set innermost value
+	deepestMap[lastKey] = value
+}
+
+
 // Set sets the value for the key in the override register.
 // Set is case-insensitive for a key.
 // Will be used instead of values obtained via
@@ -1185,15 +1203,13 @@ func (v *Viper) SetDefault(key string, value interface{}) {
 func Set(key string, value interface{}) { v.Set(key, value) }
 func (v *Viper) Set(key string, value interface{}) {
 	// If alias passed in, then set the proper override
-	key = v.realKey(strings.ToLower(key))
-	value = toCaseInsensitiveValue(value)
+	v.set(v.override, key, value)
+}
 
-	path := strings.Split(key, v.keyDelim)
-	lastKey := strings.ToLower(path[len(path)-1])
-	deepestMap := deepSearch(v.override, path[0:len(path)-1])
-
-	// set innermost value
-	deepestMap[lastKey] = value
+// SetConfig set config
+func (v *Viper) SetConfig(key string, value interface{}) {
+	// If alias passed in, then set the proper config
+	v.set(v.config, key, value)
 }
 
 // ReadInConfig will discover and load the configuration file from disk
