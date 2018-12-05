@@ -1,4 +1,4 @@
-module github.com/spf13/viper
+module hidevops.io/viper
 
 require (
 	github.com/fsnotify/fsnotify v1.4.7
