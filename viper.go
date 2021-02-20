@@ -1406,6 +1406,20 @@ func (v *Viper) Set(key string, value interface{}) {
 	deepestMap[lastKey] = value
 }
 
+// SetConfig set config
+func (v *Viper) SetConfig(key string, value interface{}) {
+	// If alias passed in, then set the proper config
+	key = v.realKey(strings.ToLower(key))
+	value = toCaseInsensitiveValue(value)
+
+	path := strings.Split(key, v.keyDelim)
+	lastKey := strings.ToLower(path[len(path)-1])
+	deepestMap := deepSearch(v.config, path[0:len(path)-1])
+
+	// set innermost value
+	deepestMap[lastKey] = value
+}
+
 // ReadInConfig will discover and load the configuration file from disk
 // and key/value stores, searching in one of the defined paths.
 func ReadInConfig() error { return v.ReadInConfig() }
