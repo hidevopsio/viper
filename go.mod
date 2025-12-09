@@ -1,6 +1,6 @@
 module github.com/hidevopsio/viper
 
-go 1.24.4
+go 1.24.2
 
 require (
 	github.com/fsnotify/fsnotify v1.4.7
