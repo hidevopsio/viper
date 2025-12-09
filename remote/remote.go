@@ -11,8 +11,8 @@ import (
 	"io"
 	"os"
 
-	crypt "github.com/xordataexchange/crypt/config"
-	"hidevops.io/viper"
+	"github.com/hidevopsio/viper"
+	crypt "github.com/sagikazarmark/crypt/config"
 )
 
 type remoteConfigProvider struct{}
