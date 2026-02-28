@@ -1505,9 +1505,10 @@ func TestWatchFile(t *testing.T) {
 		t.Logf("test config file: %s\n", configFile)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
+		var once sync.Once
 		v.OnConfigChange(func(in fsnotify.Event) {
 			t.Logf("config file changed")
-			wg.Done()
+			once.Do(func() { wg.Done() })
 		})
 		v.WatchConfig()
 		// when overwriting the file and waiting for the custom change notification handler to be triggered
@@ -1526,10 +1527,11 @@ func TestWatchFile(t *testing.T) {
 		v, watchDir, _, _ := newViperWithSymlinkedConfigFile(t)
 		// defer cleanup()
 		wg := sync.WaitGroup{}
+		var once sync.Once
 		v.WatchConfig()
 		v.OnConfigChange(func(in fsnotify.Event) {
 			t.Logf("config file changed")
-			wg.Done()
+			once.Do(func() { wg.Done() })
 		})
 		wg.Add(1)
 		// when link to another `config.yaml` file
@@ -1584,5 +1586,81 @@ func BenchmarkGetBoolFromMap(b *testing.B) {
 		if !m[key] {
 			b.Fatal("Map value was false")
 		}
+	}
+}
+
+func TestConcurrentGetSet(t *testing.T) {
+	v := New()
+	v.SetConfigType("yaml")
+	v.SetDefault("key1", "default1")
+	v.Set("key2", "value2")
+
+	done := make(chan bool)
+	// Writer goroutine
+	go func() {
+		for i := 0; i < 1000; i++ {
+			v.Set("key1", fmt.Sprintf("value_%d", i))
+			v.Set("key2", i)
+		}
+		done <- true
+	}()
+	// Reader goroutines
+	for j := 0; j < 5; j++ {
+		go func() {
+			for i := 0; i < 1000; i++ {
+				v.Get("key1")
+				v.Get("key2")
+				v.GetString("key1")
+				v.IsSet("key1")
+			}
+			done <- true
+		}()
+	}
+	// Wait for all goroutines
+	for i := 0; i < 6; i++ {
+		<-done
+	}
+}
+
+func TestConcurrentReadInConfigAndGet(t *testing.T) {
+	v := New()
+	v.SetConfigType("yaml")
+	v.SetFs(afero.NewMemMapFs())
+
+	// Write a config file to the in-memory fs
+	configContent := []byte("key1: value1\nkey2: value2\n")
+	afero.WriteFile(v.fs, "/config.yaml", configContent, 0644)
+	v.SetConfigFile("/config.yaml")
+
+	// Initial load
+	err := v.ReadInConfig()
+	if err != nil {
+		t.Fatalf("Failed to read config: %v", err)
+	}
+
+	done := make(chan bool)
+	// Writer goroutine: repeatedly reload config
+	go func() {
+		for i := 0; i < 100; i++ {
+			content := []byte(fmt.Sprintf("key1: value_%d\nkey2: %d\n", i, i))
+			afero.WriteFile(v.fs, "/config.yaml", content, 0644)
+			v.ReadInConfig()
+		}
+		done <- true
+	}()
+	// Reader goroutines
+	for j := 0; j < 5; j++ {
+		go func() {
+			for i := 0; i < 500; i++ {
+				v.Get("key1")
+				v.Get("key2")
+				v.GetString("key1")
+			}
+			done <- true
+		}()
+	}
+	// Wait for all goroutines
+	for i := 0; i < 6; i++ {
+		<-done
 	}
 }

@@ -277,6 +277,8 @@ var SupportedRemoteProviders = []string{"etcd", "consul"}
 
 func OnConfigChange(run func(in fsnotify.Event)) { v.OnConfigChange(run) }
 func (v *Viper) OnConfigChange(run func(in fsnotify.Event)) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.onConfigChange = run
 }
 
@@ -325,8 +327,11 @@ func (v *Viper) WatchConfig() {
 						if err != nil {
 							log.Printf("error reading config file: %v\n", err)
 						}
-						if v.onConfigChange != nil {
-							v.onConfigChange(event)
+						v.mu.RLock()
+						onChange := v.onConfigChange
+						v.mu.RUnlock()
+						if onChange != nil {
+							onChange(event)
 						}
 					} else if filepath.Clean(event.Name) == configFile &&
 						event.Op&fsnotify.Remove&fsnotify.Remove != 0 {
@@ -355,6 +360,8 @@ func (v *Viper) WatchConfig() {
 func SetConfigFile(in string) { v.SetConfigFile(in) }
 func (v *Viper) SetConfigFile(in string) {
 	if in != "" {
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		v.configFile = in
 	}
 }
@@ -365,6 +372,8 @@ func (v *Viper) SetConfigFile(in string) {
 func SetEnvPrefix(in string) { v.SetEnvPrefix(in) }
 func (v *Viper) SetEnvPrefix(in string) {
 	if in != "" {
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		v.envPrefix = in
 	}
 }
@@ -382,6 +391,8 @@ func (v *Viper) mergeWithEnvPrefix(in string) string {
 // For backward compatibility reasons this is false by default.
 func AllowEmptyEnv(allowEmptyEnv bool) { v.AllowEmptyEnv(allowEmptyEnv) }
 func (v *Viper) AllowEmptyEnv(allowEmptyEnv bool) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.allowEmptyEnv = allowEmptyEnv
 }
 
@@ -404,7 +415,11 @@ func (v *Viper) getEnv(key string) (string, bool) {
 
 // ConfigFileUsed returns the file used to populate the config registry.
 func ConfigFileUsed() string            { return v.ConfigFileUsed() }
-func (v *Viper) ConfigFileUsed() string { return v.configFile }
+func (v *Viper) ConfigFileUsed() string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.configFile
+}
 
 // AddConfigPath adds a path for Viper to search for the config file in.
 // Can be called multiple times to define multiple search paths.
@@ -413,6 +428,8 @@ func (v *Viper) AddConfigPath(in string) {
 	if in != "" {
 		absin := absPathify(in)
 		jww.INFO.Println("adding", absin, "to paths to search")
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		if !stringInSlice(absin, v.configPaths) {
 			v.configPaths = append(v.configPaths, absin)
 		}
@@ -441,6 +458,8 @@ func (v *Viper) AddRemoteProvider(provider, endpoint, path string) error {
 			provider: provider,
 			path:     path,
 		}
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		if !v.providerPathExists(rp) {
 			v.remoteProviders = append(v.remoteProviders, rp)
 		}
@@ -474,6 +493,8 @@ func (v *Viper) AddSecureRemoteProvider(provider, endpoint, path, secretkeyring 
 			path:          path,
 			secretKeyring: secretkeyring,
 		}
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		if !v.providerPathExists(rp) {
 			v.remoteProviders = append(v.remoteProviders, rp)
 		}
@@ -651,6 +672,8 @@ func (v *Viper) isPathShadowedInAutoEnv(path []string) string {
 //   "a b c"
 func SetTypeByDefaultValue(enable bool) { v.SetTypeByDefaultValue(enable) }
 func (v *Viper) SetTypeByDefaultValue(enable bool) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.typeByDefValue = enable
 }
 
@@ -950,15 +973,16 @@ func (v *Viper) BindEnv(input ...string) error {
 
 	key = strings.ToLower(input[0])
 
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
 	if len(input) == 1 {
 		envkey = v.mergeWithEnvPrefix(key)
 	} else {
 		envkey = input[1]
 	}
 
-	v.mu.Lock()
 	v.env[key] = envkey
-	v.mu.Unlock()
 
 	return nil
 }
@@ -1112,6 +1136,8 @@ func (v *Viper) IsSet(key string) bool {
 // keys set in config, default & flags
 func AutomaticEnv() { v.AutomaticEnv() }
 func (v *Viper) AutomaticEnv() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.automaticEnvApplied = true
 }
 
@@ -1120,6 +1146,8 @@ func (v *Viper) AutomaticEnv() {
 // not match it.
 func SetEnvKeyReplacer(r *strings.Replacer) { v.SetEnvKeyReplacer(r) }
 func (v *Viper) SetEnvKeyReplacer(r *strings.Replacer) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.envKeyReplacer = r
 }
 
@@ -1252,6 +1280,10 @@ func (v *Viper) SetConfig(key string, value interface{}) {
 func ReadInConfig() error { return v.ReadInConfig() }
 func (v *Viper) ReadInConfig() error {
 	jww.INFO.Println("Attempting to read in config file")
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
 	filename, err := v.getConfigFile()
 	if err != nil {
 		return err
@@ -1274,9 +1306,7 @@ func (v *Viper) ReadInConfig() error {
 		return err
 	}
 
-	v.mu.Lock()
 	v.config = config
-	v.mu.Unlock()
 	return nil
 }
 
@@ -1284,6 +1314,10 @@ func (v *Viper) ReadInConfig() error {
 func MergeInConfig() error { return v.MergeInConfig() }
 func (v *Viper) MergeInConfig() error {
 	jww.INFO.Println("Attempting to merge in config file")
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
 	filename, err := v.getConfigFile()
 	if err != nil {
 		return err
@@ -1298,7 +1332,16 @@ func (v *Viper) MergeInConfig() error {
 		return err
 	}
 
-	return v.MergeConfig(bytes.NewReader(file))
+	cfg := make(map[string]interface{})
+	if err := v.unmarshalReader(bytes.NewReader(file), cfg); err != nil {
+		return err
+	}
+
+	if v.config == nil {
+		v.config = make(map[string]interface{})
+	}
+	mergeMaps(cfg, v.config, nil)
+	return nil
 }
 
 // ReadConfig will read a configuration file, setting existing keys to nil if the
@@ -1651,7 +1694,9 @@ func (v *Viper) getKeyValueConfig() error {
 		if err != nil {
 			continue
 		}
+		v.mu.Lock()
 		v.kvstore = val
+		v.mu.Unlock()
 		return nil
 	}
 	return RemoteConfigError("No Files Found")
@@ -1662,8 +1707,11 @@ func (v *Viper) getRemoteConfig(provider RemoteProvider) (map[string]interface{}
 	if err != nil {
 		return nil, err
 	}
+	v.mu.Lock()
 	err = v.unmarshalReader(reader, v.kvstore)
-	return v.kvstore, err
+	result := v.kvstore
+	v.mu.Unlock()
+	return result, err
 }
 
 // Retrieve the first found remote configuration.
@@ -1675,7 +1723,9 @@ func (v *Viper) watchKeyValueConfigOnChannel() error {
 			for {
 				b := <-rc
 				reader := bytes.NewReader(b.Value)
+				v.mu.Lock()
 				v.unmarshalReader(reader, v.kvstore)
+				v.mu.Unlock()
 			}
 		}(respc)
 		return nil
@@ -1690,7 +1740,9 @@ func (v *Viper) watchKeyValueConfig() error {
 		if err != nil {
 			continue
 		}
+		v.mu.Lock()
 		v.kvstore = val
+		v.mu.Unlock()
 		return nil
 	}
 	return RemoteConfigError("No Files Found")
@@ -1701,8 +1753,11 @@ func (v *Viper) watchRemoteConfig(provider RemoteProvider) (map[string]interface
 	if err != nil {
 		return nil, err
 	}
+	v.mu.Lock()
 	err = v.unmarshalReader(reader, v.kvstore)
-	return v.kvstore, err
+	result := v.kvstore
+	v.mu.Unlock()
+	return result, err
 }
 
 // AllKeys returns all keys holding a value, regardless of where they are set.
@@ -1813,6 +1868,8 @@ func (v *Viper) AllSettings() map[string]interface{} {
 // SetFs sets the filesystem to use to read configuration.
 func SetFs(fs afero.Fs) { v.SetFs(fs) }
 func (v *Viper) SetFs(fs afero.Fs) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	v.fs = fs
 }
 
@@ -1821,6 +1878,8 @@ func (v *Viper) SetFs(fs afero.Fs) {
 func SetConfigName(in string) { v.SetConfigName(in) }
 func (v *Viper) SetConfigName(in string) {
 	if in != "" {
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		v.configName = in
 		v.configFile = ""
 	}
@@ -1831,6 +1890,8 @@ func (v *Viper) SetConfigName(in string) {
 func SetConfigType(in string) { v.SetConfigType(in) }
 func (v *Viper) SetConfigType(in string) {
 	if in != "" {
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		v.configType = in
 	}
 }
