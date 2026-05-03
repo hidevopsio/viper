@@ -118,27 +118,27 @@ func initConfigs() {
 	var r io.Reader
 	SetConfigType("yaml")
 	r = bytes.NewReader(yamlExample)
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 
 	SetConfigType("json")
 	r = bytes.NewReader(jsonExample)
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 
 	SetConfigType("hcl")
 	r = bytes.NewReader(hclExample)
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 
 	SetConfigType("properties")
 	r = bytes.NewReader(propertiesExample)
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 
 	SetConfigType("toml")
 	r = bytes.NewReader(tomlExample)
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 
 	SetConfigType("json")
 	remote := bytes.NewReader(remoteExample)
-	unmarshalReader(remote, v.kvstore)
+	unmarshalReader(remote, gv().kvstore)
 }
 
 func initConfig(typ, config string) {
@@ -146,7 +146,7 @@ func initConfig(typ, config string) {
 	SetConfigType(typ)
 	r := strings.NewReader(config)
 
-	if err := unmarshalReader(r, v.config); err != nil {
+	if err := unmarshalReader(r, gv().config); err != nil {
 		panic(err)
 	}
 }
@@ -160,7 +160,7 @@ func initJSON() {
 	SetConfigType("json")
 	r := bytes.NewReader(jsonExample)
 
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 }
 
 func initProperties() {
@@ -168,7 +168,7 @@ func initProperties() {
 	SetConfigType("properties")
 	r := bytes.NewReader(propertiesExample)
 
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 }
 
 func initTOML() {
@@ -176,7 +176,7 @@ func initTOML() {
 	SetConfigType("toml")
 	r := bytes.NewReader(tomlExample)
 
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 }
 
 func initHcl() {
@@ -184,7 +184,7 @@ func initHcl() {
 	SetConfigType("hcl")
 	r := bytes.NewReader(hclExample)
 
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 }
 
 // make directories for testing
@@ -251,7 +251,7 @@ func (s *stringValue) String() string {
 
 func TestBasics(t *testing.T) {
 	SetConfigFile("/tmp/config.yaml")
-	filename, err := v.getConfigFile()
+	filename, err := gv().getConfigFile()
 	assert.Equal(t, "/tmp/config.yaml", filename)
 	assert.NoError(t, err)
 }
@@ -274,7 +274,7 @@ func TestUnmarshaling(t *testing.T) {
 	SetConfigType("yaml")
 	r := bytes.NewReader(yamlExample)
 
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 	assert.True(t, InConfig("name"))
 	assert.False(t, InConfig("state"))
 	assert.Equal(t, "steve", Get("name"))
@@ -358,7 +358,7 @@ func TestRemotePrecedence(t *testing.T) {
 
 	remote := bytes.NewReader(remoteExample)
 	assert.Equal(t, "0001", Get("id"))
-	unmarshalReader(remote, v.kvstore)
+	unmarshalReader(remote, gv().kvstore)
 	assert.Equal(t, "0001", Get("id"))
 	assert.NotEqual(t, "cronut", Get("type"))
 	assert.Equal(t, "remote", Get("newkey"))
@@ -819,7 +819,7 @@ func TestFindsNestedKeys(t *testing.T) {
 
 	for key, expectedValue := range expected {
 
-		assert.Equal(t, expectedValue, v.Get(key))
+		assert.Equal(t, expectedValue, Get(key))
 	}
 
 }
@@ -1258,7 +1258,7 @@ func TestUnmarshalingWithAliases(t *testing.T) {
 func TestSetConfigNameClearsFileCache(t *testing.T) {
 	SetConfigFile("/tmp/config.yaml")
 	SetConfigName("default")
-	f, err := v.getConfigFile()
+	f, err := gv().getConfigFile()
 	if err == nil {
 		t.Fatalf("config file cache should have been cleared")
 	}
@@ -1295,7 +1295,7 @@ func TestDotParameter(t *testing.T) {
 	initJSON()
 	// shoud take precedence over batters defined in jsonExample
 	r := bytes.NewReader([]byte(`{ "batters.batter": [ { "type": "Small" } ] }`))
-	unmarshalReader(r, v.config)
+	unmarshalReader(r, gv().config)
 
 	actual := Get("batters.batter")
 	expected := []interface{}{map[string]interface{}{"type": "Small"}}
@@ -1425,7 +1425,7 @@ func TestParseNested(t *testing.T) {
 	initConfig("toml", config)
 
 	var items []item
-	err := v.UnmarshalKey("parent", &items)
+	err := UnmarshalKey("parent", &items)
 	if err != nil {
 		t.Fatalf("unable to decode into struct, %v", err)
 	}
@@ -1554,7 +1554,7 @@ func TestWatchFile(t *testing.T) {
 
 func BenchmarkGetBool(b *testing.B) {
 	key := "BenchmarkGetBool"
-	v = New()
+	v := New()
 	v.Set(key, true)
 
 	for i := 0; i < b.N; i++ {
@@ -1566,7 +1566,7 @@ func BenchmarkGetBool(b *testing.B) {
 
 func BenchmarkGet(b *testing.B) {
 	key := "BenchmarkGet"
-	v = New()
+	v := New()
 	v.Set(key, true)
 
 	for i := 0; i < b.N; i++ {
